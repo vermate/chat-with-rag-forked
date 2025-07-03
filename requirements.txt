@@ -1,10 +1,10 @@
 chroma
 langchain
-lanchain-chrome
-lanchain-core
-lanchain-community
-lanchain-huggingface
-lanchain-google-genai
+langchain-chroma
+langchain-core
+langchain-community
+langchain-huggingface
+langchain-google-genai
 transformers
 python-dotenv
 streamlit
