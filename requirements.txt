@@ -4,7 +4,8 @@ langchain-chroma
 langchain-core
 langchain-community
 langchain-huggingface
-langchain-google-genai
-transformers
+langchain-google-genai==2.0.10
+sentence-transformers
 python-dotenv
 streamlit
+bs4
