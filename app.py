@@ -1,3 +1,5 @@
+import os
+
 import streamlit as st
 from dotenv import load_dotenv
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
@@ -22,23 +24,26 @@ def get_vectorstore_from_url(url):
     text_splitter = RecursiveCharacterTextSplitter()
     document_chunks = text_splitter.split_documents(document)
     # initialize the free Hugging Face embedding model
-    embedding_model = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
-    )
+    embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     # create a vectorstore from the chunks
     vector_store = Chroma.from_documents(document_chunks, embedding_model)
     return vector_store
 
 
 def get_context_retriever_chain(vector_store):
-    llm_pipeline = pipeline(
-        "text2text-generation",
-        model="google/flan-t5-base",
-        max_length=512,
-        truncation=True,
-    )
+    """This function:
+    1. uses text2text-generation task on google/flan-t5-base model via hugging face interface using pipelne method which returns a hugging face model
+    2. Wraps the hugging face model into langchain compatible model
+    3. retrive embedding as vector object
+    4. create a prompt to generate context query based n past chat
+    5. uses create_history_aware_retriever to chain the prompt to retriver and llm to generate relevant documents
+    """
+    # initialize a hugging face model wrapper and then wrap it in leangchain's HuggingFacePipeline
+    llm_pipeline = pipeline("text2text-generation", model="google/flan-t5-base")
     llm = HuggingFacePipeline(pipeline=llm_pipeline)
     retriever = vector_store.as_retriever()
+
+    # prompt to generate a contextual query wrt chat history, this query willl be embeded automatically when fed into retriver
     prompt = ChatPromptTemplate.from_messages(
         [
             MessagesPlaceholder(variable_name="chat_history"),
@@ -49,13 +54,16 @@ def get_context_retriever_chain(vector_store):
             ),
         ]
     )
-    retriever_chain = create_history_aware_retriever(llm, retriever, prompt)
+    # create a create_history_aware_retriever
+    retriever_chain = create_history_aware_retriever(llm, retriever, prompt)  # retriever chain
     return retriever_chain
 
 
 def get_conversational_rag_chain(retriever_chain):
-    # Initialize Gemini 1.5 Flash (free tier with 1,500 RPD)
-    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.7)
+    # Initialize Gemini 2.5 Flash (free tier with 1,500 RPD)
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.5-flash", google_api_key=os.getenv("GOOGLE_API_KEY"), temperature=0.7
+    )
     prompt = ChatPromptTemplate.from_messages(
         [
             (
@@ -66,8 +74,10 @@ def get_conversational_rag_chain(retriever_chain):
             ("user", "{input}"),
         ]
     )
-    stuff_documents_chain = create_stuff_documents_chain(llm, prompt)
-    return create_retrieval_chain(retriever_chain, stuff_documents_chain)
+    stuff_documents_chain = create_stuff_documents_chain(llm, prompt)  # llm chain
+    return create_retrieval_chain(
+        retriever_chain, stuff_documents_chain
+    )  # chain to combine retriver and llm chain
 
 
 def get_response(user_input):
@@ -76,6 +86,7 @@ def get_response(user_input):
     response = conversation_rag_chain.invoke(
         {"chat_history": st.session_state.chat_history, "input": user_input}
     )
+    # print("llm response is ", response)
     return response["answer"]
 
 
