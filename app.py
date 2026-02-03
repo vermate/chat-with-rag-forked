@@ -12,18 +12,19 @@ import streamlit as st
 from langchain_core.messages import AIMessage, HumanMessage
 
 import config
-from rag_chains import create_vectorstore_from_url
+from rag_chains import create_vectorstore_from_pdf, create_vectorstore_from_url
 from response_handler import ResponseHandler
 from ui_components import render_chat_history, render_sidebar
 from validator import RAGValidator
 
 
-def initialize_session_state(website_url: str):
+def initialize_session_state(source_type: str, source=None):
     """
     Initialize Streamlit session state variables.
 
     Args:
-        website_url: Website URL to load content from
+        source_type: Type of source - "url" or "pdf"
+        source: Website URL string or uploaded PDF file
     """
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = [
@@ -31,8 +32,11 @@ def initialize_session_state(website_url: str):
         ]
 
     if "vector_store" not in st.session_state:
-        with st.spinner("Loading content from URL..."):
-            st.session_state.vector_store = create_vectorstore_from_url(website_url)
+        with st.spinner(f"Loading content from {source_type}..."):
+            if source_type == "url":
+                st.session_state.vector_store = create_vectorstore_from_url(source)
+            elif source_type == "pdf":
+                st.session_state.vector_store = create_vectorstore_from_pdf(source)
 
     if "validator" not in st.session_state:
         st.session_state.validator = RAGValidator()
@@ -74,23 +78,46 @@ def main():
     st.set_page_config(page_title=config.APP_TITLE, page_icon="💬", layout="wide")
     st.title(config.APP_TITLE)
 
-    # Render sidebar and get URL
-    website_url = render_sidebar()
+    # Render sidebar and get input source
+    website_url, uploaded_file = render_sidebar()
 
-    # Check if URL is provided
-    if not website_url:
-        st.info("Please enter a website URL in the sidebar to get started")
+    # Check if input is provided
+    if not website_url and not uploaded_file:
+        st.info("Please enter a website URL or upload a PDF file in the sidebar to get started")
         st.markdown("""
         ### How to use:
-        1. Enter a website URL in the sidebar
-        2. Ask questions about the content
-        3. Get AI-powered answers with quality validation
-        4. View validation metrics for each response
+        1. Choose input method: URL or PDF Upload
+        2. Enter a website URL or upload a PDF file
+        3. Ask questions about the content
+        4. Get AI-powered answers with quality validation
+        5. View validation metrics for each response
         """)
         return
 
+    # Determine source type and initialize
+    if website_url:
+        source_type = "url"
+        source = website_url
+        # Reset session state if URL changed
+        if (
+            "current_source" not in st.session_state
+            or st.session_state.current_source != website_url
+        ):
+            st.session_state.clear()
+            st.session_state.current_source = website_url
+    else:
+        source_type = "pdf"
+        source = uploaded_file
+        # Reset session state if PDF changed
+        if (
+            "current_source" not in st.session_state
+            or st.session_state.current_source != uploaded_file.name
+        ):
+            st.session_state.clear()
+            st.session_state.current_source = uploaded_file.name
+
     # Initialize session state
-    initialize_session_state(website_url)
+    initialize_session_state(source_type, source)
 
     # Handle user input
     user_query = st.chat_input("Type your message here...")

@@ -2,17 +2,21 @@
 RAG chain components for context retrieval and response generation.
 """
 
+from typing import List
+
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_community.vectorstores import Chroma
+from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_huggingface import HuggingFaceEmbeddings, HuggingFacePipeline
 from transformers import pipeline
 
 import config
+from pdf_loader import load_pdf_from_upload, split_documents
 
 
 def create_vectorstore_from_url(url: str):
@@ -32,6 +36,51 @@ def create_vectorstore_from_url(url: str):
     # Split document into chunks
     text_splitter = RecursiveCharacterTextSplitter()
     document_chunks = text_splitter.split_documents(document)
+
+    # Initialize embedding model
+    embedding_model = HuggingFaceEmbeddings(model_name=config.EMBEDDING_MODEL_NAME)
+
+    # Create and return vector store
+    vector_store = Chroma.from_documents(document_chunks, embedding_model)
+    return vector_store
+
+
+def create_vectorstore_from_pdf(uploaded_file):
+    """
+    Load content from uploaded PDF and create a vector store.
+
+    Args:
+        uploaded_file: Streamlit UploadedFile object
+
+    Returns:
+        Chroma vector store with embedded document chunks
+    """
+    # Load PDF documents
+    documents = load_pdf_from_upload(uploaded_file)
+
+    # Split documents into chunks
+    document_chunks = split_documents(documents)
+
+    # Initialize embedding model
+    embedding_model = HuggingFaceEmbeddings(model_name=config.EMBEDDING_MODEL_NAME)
+
+    # Create and return vector store
+    vector_store = Chroma.from_documents(document_chunks, embedding_model)
+    return vector_store
+
+
+def create_vectorstore_from_documents(documents: List[Document]):
+    """
+    Create a vector store from a list of documents.
+
+    Args:
+        documents: List of Document objects
+
+    Returns:
+        Chroma vector store with embedded document chunks
+    """
+    # Split documents into chunks
+    document_chunks = split_documents(documents)
 
     # Initialize embedding model
     embedding_model = HuggingFaceEmbeddings(model_name=config.EMBEDDING_MODEL_NAME)
